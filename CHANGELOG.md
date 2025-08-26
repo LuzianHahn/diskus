@@ -14,6 +14,12 @@
 
 ## Packaging
 
+# v0.9.0
+
+The default behavior for `diskus` changed, when multiple paths are passed as arguments.
+Beforehand, there size was aggregated. Now `diskus` returns the sizes for each path separately.
+One can still tigger aggregation via `-a/--aggregate`.
+
 # v0.6.0
 
 - Updated dependencies
