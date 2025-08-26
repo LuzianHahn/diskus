@@ -42,6 +42,31 @@ fn print_result(size: u64, errors: &[Error], size_format: &FileSizeOpts, verbose
     }
 }
 
+
+fn perform_walks(walks: Vec<Walk>, aggregate: bool, size_format: FileSizeOpts, verbose: bool) {
+    if aggregate {
+        let mut total_size = 0;
+        let mut all_errors = Vec::new();
+
+        for walk in walks {
+            let (size, errors) = walk.run();
+            total_size += size;
+            all_errors.extend(errors);
+        }
+
+        print_result(total_size, &all_errors, &size_format, verbose);
+    } else {
+        for walk in walks {
+            // each Walk knows its own root_directories
+            let (size, errors) = walk.run();
+            for path in walk.get_root_directories() {
+                println!("{}:", path.display());
+            }
+            print_result(size, &errors, &size_format, verbose);
+        }
+    }
+}
+
 fn main() {
     let app = App::new(crate_name!())
         .setting(AppSettings::ColorAuto)
@@ -78,6 +103,13 @@ fn main() {
                 .short("v")
                 .takes_value(false)
                 .help("Do not hide filesystem errors"),
+        )
+        .arg(
+            Arg::with_name("aggregate")
+                .long("aggregate")
+                .short("a")
+                .takes_value(false)
+                .help("Aggregate sizes across all provided paths"),
         );
 
     #[cfg(not(windows))]
@@ -117,8 +149,15 @@ fn main() {
     };
 
     let verbose = matches.is_present("verbose");
+    let aggregate = matches.is_present("aggregate");
+    let walks: Vec<Walk> = if aggregate {
+        vec![Walk::new(&paths, num_threads, filesize_type)]
+    } else {
+        paths
+            .iter()
+            .map(|p| Walk::new(std::slice::from_ref(p), num_threads, filesize_type))
+            .collect()
+    };
 
-    let walk = Walk::new(&paths, num_threads, filesize_type);
-    let (size, errors) = walk.run();
-    print_result(size, &errors, &size_format, verbose);
+    perform_walks(walks, aggregate, size_format, verbose);
 }

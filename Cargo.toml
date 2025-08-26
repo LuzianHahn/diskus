@@ -25,6 +25,10 @@ features = ["suggestions", "color", "wrap_help"]
 
 [dev-dependencies]
 tempdir = "0.3"
+assert_cmd = "2.0"
+tempfile = "3.6"
+predicates = "2.1"
+
 
 [[bin]]
 name = "diskus"
