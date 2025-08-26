@@ -1,13 +1,15 @@
 use std::path::PathBuf;
+use std::io::{self, Write};
 
 use clap::{crate_name, crate_version, App, AppSettings, Arg};
 use humansize::file_size_opts::{self, FileSizeOpts};
 use humansize::FileSize;
 use num_format::{Locale, ToFormattedString};
+use tabwriter::TabWriter;
 
 use diskus::{Error, FilesizeType, Walk};
 
-fn print_result(size: u64, errors: &[Error], size_format: &FileSizeOpts, verbose: bool) {
+fn build_message(path: Option<&PathBuf>, size: u64, errors: &[Error], size_format: &FileSizeOpts, verbose: bool) -> String {
     if verbose {
         for err in errors {
             match err {
@@ -31,14 +33,17 @@ fn print_result(size: u64, errors: &[Error], size_format: &FileSizeOpts, verbose
         );
     }
 
+    let path_info = path.map(|p| format!("\t{}", p.to_string_lossy())).unwrap_or_default();
     if atty::is(atty::Stream::Stdout) {
-        println!(
-            "{} ({:} bytes)",
-            size.file_size(size_format).unwrap(),
-            size.to_formatted_string(&Locale::en)
-        );
+        let human_readable_size = size.file_size(size_format).unwrap();
+        let size_in_bytes = size.to_formatted_string(&Locale::en);
+        if verbose {
+            format!("{} ({:} bytes){}", human_readable_size, size_in_bytes, path_info)
+        } else {
+            format!("{}{}", human_readable_size, path_info)
+        }
     } else {
-        println!("{}", size);
+        format!("{}{}", size, path_info)
     }
 }
 
@@ -54,16 +59,21 @@ fn perform_walks(walks: Vec<Walk>, aggregate: bool, size_format: FileSizeOpts, v
             all_errors.extend(errors);
         }
 
-        print_result(total_size, &all_errors, &size_format, verbose);
+        println!("{}",
+            build_message(None, total_size, &all_errors, &size_format, verbose)
+        );
     } else {
+        let mut tw = TabWriter::new(io::stdout()).padding(2);
         for walk in walks {
             // each Walk knows its own root_directories
             let (size, errors) = walk.run();
-            for path in walk.get_root_directories() {
-                println!("{}:", path.display());
-            }
-            print_result(size, &errors, &size_format, verbose);
+            assert_eq!(walk.get_root_directories().len(), 1, "perform_walks can only be called without aggregation with a single root directory");
+            let path = &walk.get_root_directories()[0];
+            writeln!(tw, "{}",
+                build_message(Some(path), size, &errors, &size_format, verbose)
+            ).unwrap();
         }
+        tw.flush().unwrap();
     }
 }
 

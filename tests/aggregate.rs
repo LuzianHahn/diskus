@@ -28,9 +28,9 @@ fn test_diskus_output_lines() {
     let out_str = String::from_utf8_lossy(&output);
 
     // Each path prints one header line + one size line
-    // e.g., "dir1:\n4196 bytes\n"
+    // e.g., "4196\tdir1"
     let lines: Vec<&str> = out_str.lines().collect();
-    assert_eq!(lines.len(), 4); // 2 directories × 2 lines each (header + size)
+    assert_eq!(lines.len(), 2);
 
     // ---- Aggregate mode (-a) ----
     let mut cmd = Command::cargo_bin("diskus").unwrap();
