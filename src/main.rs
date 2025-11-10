@@ -9,7 +9,7 @@ use tabwriter::TabWriter;
 
 use diskus::{Error, FilesizeType, Walk};
 
-fn build_message(path: Option<&PathBuf>, size: u64, errors: &[Error], size_format: &FileSizeOpts, verbose: bool) -> String {
+fn build_message(path: Option<&PathBuf>, size: u64, errors: &[Error], size_format: &FileSizeOpts, raw: bool, verbose: bool) -> String {
     if verbose {
         for err in errors {
             match err {
@@ -34,7 +34,9 @@ fn build_message(path: Option<&PathBuf>, size: u64, errors: &[Error], size_forma
     }
 
     let path_info = path.map(|p| format!("\t{}", p.to_string_lossy())).unwrap_or_default();
-    if atty::is(atty::Stream::Stdout) {
+    if raw {
+        format!("{}{}", size, path_info)
+    } else {
         let human_readable_size = size.file_size(size_format).unwrap();
         let size_in_bytes = size.to_formatted_string(&Locale::en);
         if verbose {
@@ -42,13 +44,11 @@ fn build_message(path: Option<&PathBuf>, size: u64, errors: &[Error], size_forma
         } else {
             format!("{}{}", human_readable_size, path_info)
         }
-    } else {
-        format!("{}{}", size, path_info)
     }
 }
 
 
-fn perform_walks(walks: Vec<Walk>, aggregate: bool, size_format: FileSizeOpts, verbose: bool) {
+fn perform_walks(walks: Vec<Walk>, aggregate: bool, size_format: FileSizeOpts, raw: bool, verbose: bool) {
     if aggregate {
         let mut total_size = 0;
         let mut all_errors = Vec::new();
@@ -60,7 +60,7 @@ fn perform_walks(walks: Vec<Walk>, aggregate: bool, size_format: FileSizeOpts, v
         }
 
         println!("{}",
-            build_message(None, total_size, &all_errors, &size_format, verbose)
+            build_message(None, total_size, &all_errors, &size_format, raw, verbose)
         );
     } else {
         let mut tw = TabWriter::new(io::stdout()).padding(2);
@@ -70,7 +70,7 @@ fn perform_walks(walks: Vec<Walk>, aggregate: bool, size_format: FileSizeOpts, v
             assert_eq!(walk.get_root_directories().len(), 1, "perform_walks can only be called without aggregation with a single root directory");
             let path = &walk.get_root_directories()[0];
             writeln!(tw, "{}",
-                build_message(Some(path), size, &errors, &size_format, verbose)
+                build_message(Some(path), size, &errors, &size_format, raw, verbose)
             ).unwrap();
         }
         tw.flush().unwrap();
@@ -106,6 +106,12 @@ fn main() {
                 .possible_values(&["decimal", "binary"])
                 .default_value("decimal")
                 .help("Output format for file sizes (decimal: MB, binary: MiB)"),
+        )
+        .arg(
+            Arg::with_name("raw")
+                .long("raw")
+                .takes_value(false)
+                .help("Instead of human-readable sizes uses raw numbers in bytes. Makes the system ignore the parameter \"size-format\"."),
         )
         .arg(
             Arg::with_name("verbose")
@@ -158,6 +164,7 @@ fn main() {
         _ => file_size_opts::BINARY,
     };
 
+    let raw = matches.is_present("raw");
     let verbose = matches.is_present("verbose");
     let aggregate = matches.is_present("aggregate");
     let walks: Vec<Walk> = if aggregate {
@@ -169,5 +176,5 @@ fn main() {
             .collect()
     };
 
-    perform_walks(walks, aggregate, size_format, verbose);
+    perform_walks(walks, aggregate, size_format, raw, verbose);
 }
